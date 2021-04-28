@@ -55,9 +55,13 @@ class PointContinuousEnv(gym.Env):
 
         self.seed()
         self.curve = 'S'
+        self.reset_condition = 'origin'
 
     def set_curve(self, curve='S'):
         self.curve = curve
+
+    def set_reset_condition(self, cond='origin'):
+        self.reset_condition = cond
 
     def seed(self, given_seed=None):
         self.numpy_random, seed = seeding.np_random(given_seed)
@@ -160,9 +164,12 @@ class PointContinuousEnv(gym.Env):
         return deepcopy(self.state), reward, done, info
 
     def reset(self):
-        # self.state = self.observation_space.sample()
         # print(self.state[0])
-        self.state = numpy.array([0.0, 0.0, 0.0, 0.0], dtype=numpy.float32)
+        if self.reset_condition=='origin':
+            self.state = numpy.array([0.0, 0.0, 0.0, 0.0], dtype=numpy.float32)
+        else:
+            self.state = self.observation_space.sample()
+        
         self.traj = self.state.reshape(1,4)
         self.timer = 0 #self.state[0]
         return deepcopy(self.state)
