@@ -232,6 +232,7 @@ class PGN(nn.Module):
         states, actions, rewards, dones = self.generate_session(env, 100, False, device)
         fig = plt.figure(figsize=[6.4, 4.8])
         plt.plot(env.traj[:,0], env.traj[:,1])
+        self.train()
         return np.sum(rewards), fig
 
 class RewardNet(nn.Module):

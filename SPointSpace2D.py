@@ -25,7 +25,9 @@ torch.manual_seed(seed)
 
 # Get Environement 
 env = gym.make('PointContinuousEnv-v0')
-env.set_curve('S')
+env.set_curve('S') # Curve: 'S', 'C'
+env.set_reset_condition('origin') # reset state: 'origin', 'random'
+
 agent_net = PGN(env.observation_space.shape[0], env.action_space.n)
 reward_net = RewardNet(env.observation_space.shape[0] + 1)
 optimizer_agent = optim.Adam(agent_net.parameters(), lr=LEARNING_RATE)
@@ -41,16 +43,18 @@ grl.test_demonstrations(demonstrations, Nsamp=5, render=False)
 total_rewards = []
 step_idx = 0
 done_episodes = 0
-DEMO_BATCH = 100
-BSIZE = 100 # batch size
+DEMO_BATCH = 256
+BSIZE = 256 # batch size
 
 batch_episodes = 0
 batch_states, batch_actions, batch_qvals = deque([], BSIZE), deque([], BSIZE), deque([], BSIZE)
 net_rewards = deque([], 100)
 env_rewards = deque([], 100)
 loss_rwd = 0.
+EPISODES = 1000000
 
-while done_episodes < 500000:
+
+while done_episodes < EPISODES:
     states, actions, rewards, done = agent_net.generate_session(env, BSIZE)
     
     # Store samples in batch
@@ -60,6 +64,9 @@ while done_episodes < 500000:
     env_reward = np.sum(rewards)
     env_rewards.extend([env_reward])
     
+    if len(batch_actions) < BSIZE:
+        continue
+
     batch_episodes += 1
         
     # Get reward from reward_net
@@ -80,18 +87,20 @@ while done_episodes < 500000:
     print(f'{done_episodes}: reward: {env_reward:6.2f}, mean_env_reward: {mean_env_rewards:6.2f}, mean_net_reward: {mean_net_rewards:6.2f}, reward function loss: {loss_rwd:6.4f}')
 
     ## Tensorboard logging 
-    if done_episodes%100==0 or mean_env_rewards>=100:
+    if done_episodes%1000==0 or mean_env_rewards>=100:
         fig = reward_net.visualize_net(agent_net, Npoints=20)
         writer.add_figure('Reward Net', fig, global_step=done_episodes/100)
         
         test_reward, test_fig = agent_net.test_agent(env,device)
         writer.add_scalar('test_reward', test_reward, done_episodes)
         writer.add_figure('Agent traj', test_fig, global_step=done_episodes/100)
+        torch.save(agent_net.state_dict(), 'S_pointspace_policy_net_origin.mod')
+        torch.save(reward_net.state_dict(), 'S_pointspace_reward_net_origin.mod')
 
     if mean_env_rewards >= 100:
         print(f'Solved in {step_idx} steps and {done_episodes} episodes!')
-        torch.save(agent_net.state_dict(), 'pointspace_policy_net_origin.mod')
-        torch.save(reward_net.state_dict(), 'pointspace_reward_net_origin.mod')
+        torch.save(agent_net.state_dict(), 'S_pointspace_policy_net_origin.mod')
+        torch.save(reward_net.state_dict(), 'S_pointspace_reward_net_origin.mod')
         break
 
     states_v = torch.FloatTensor(batch_states)
