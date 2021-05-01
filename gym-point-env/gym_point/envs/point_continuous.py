@@ -37,7 +37,7 @@ class PointContinuousEnv(gym.Env):
         self.a_max = 100 # 100
         self.timer = 0
         self.dt = 0.01
-        self.goal_margin = 0.05
+        self.goal_margin = 0.1
         self.Tspan = 1
 
         self.max_position = 1
@@ -73,8 +73,10 @@ class PointContinuousEnv(gym.Env):
     def compute_reward(self):
         if self.curve=='S':
             return self.compute_SReward()
-        else:
+        elif self.curve=='C':
             return self.compute_CReward()
+        elif self.curve=='CRev':
+            return self.compute_CRevReward()
 
     def compute_SReward(self):
         x_des = self.timer
@@ -100,6 +102,19 @@ class PointContinuousEnv(gym.Env):
         out_of_margin = distance > self.goal_margin # If agent is outside the margin 
         # reward = self.timer
         reward = 0 if out_of_margin else 1
+        return reward, out_of_margin   
+
+    def compute_CRevReward(self):
+        x_des = 0.5 - 0.5*numpy.cos(3.1457*self.timer)
+        y_des =  0.0 - 0.5*numpy.sin(3.1457*self.timer)
+        
+        distance = numpy.linalg.norm(numpy.array([x_des, y_des]) - self.state[:2])
+        # print(numpy.array([x_des, y_des]))
+        # print(numpy.array(self.state[:2]))
+        # print(distance)
+        out_of_margin = distance > self.goal_margin # If agent is outside the margin 
+        # reward = self.timer
+        reward = 0 if out_of_margin else 1
         return reward, out_of_margin    
 
     def step(self, action):
@@ -108,7 +123,8 @@ class PointContinuousEnv(gym.Env):
         
         # ax = self.action_range[action[0]]
         # ay = self.action_range[action[1]]
-
+        ax = 0
+        ay = 0
         
         a_max = self.a_max
 

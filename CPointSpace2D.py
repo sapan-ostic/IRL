@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+# In[1]:
+
+
+# ! rm -r runs
+
 import gym
 import gym_point
 import numpy as np
@@ -15,7 +20,11 @@ from torch.utils.tensorboard import SummaryWriter
 
 writer = SummaryWriter()
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print("Using device ", device)
+print(device)
+
+
+# In[2]:
+
 
 GAMMA = 0.95
 LEARNING_RATE = 0.0001
@@ -23,22 +32,39 @@ seed = 0
 np.random.seed(seed)
 torch.manual_seed(seed)
 
-# Get Environement 
+
+# In[3]:
+
+
 env = gym.make('PointContinuousEnv-v0')
 env.set_curve('C') # Curve: 'S', 'C'
 env.set_reset_condition('origin') # reset state: 'origin', 'random'
 
 agent_net = PGN(env.observation_space.shape[0], env.action_space.n)
 reward_net = RewardNet(env.observation_space.shape[0] + 1)
+
 optimizer_agent = optim.Adam(agent_net.parameters(), lr=LEARNING_RATE)
 optimizer_reward = optim.Adam(reward_net.parameters(), lr=1e-4, weight_decay=1e-3)
+
+
+# In[4]:
+
 
 agent_net.to(device)
 reward_net.to(device)
 
-grl = GRL(env, noise=0.02)
-demonstrations, XStore_steps, AStore_steps = grl.get_demonstrations(Ndemo=100, Kp=-100, Kd=-3)
-grl.test_demonstrations(demonstrations, Nsamp=5, render=False)
+
+# In[5]:
+
+
+grl = GRL(env, noise=0.01)
+demonstrations, XStore_steps, AStore_steps = grl.get_demonstrations(Ndemo=100,Kp=-100, Kd=-3)
+# grl.test_demonstrations(demonstrations, Nsamp=5, render=False)
+# demonstrations['states'][0][:10], demonstrations['actions'][0][:10]
+
+
+# In[6]:
+
 
 total_rewards = []
 step_idx = 0
@@ -51,10 +77,8 @@ batch_states, batch_actions, batch_qvals = deque([], BSIZE), deque([], BSIZE), d
 net_rewards = deque([], 100)
 env_rewards = deque([], 100)
 loss_rwd = 0.
-EPISODES = 1000000
 
-
-while done_episodes < EPISODES:
+while done_episodes < 500000:
     states, actions, rewards, done = agent_net.generate_session(env, BSIZE)
     
     # Store samples in batch
@@ -66,7 +90,7 @@ while done_episodes < EPISODES:
     
     if len(batch_actions) < BSIZE:
         continue
-
+    
     batch_episodes += 1
         
     # Get reward from reward_net
@@ -84,24 +108,24 @@ while done_episodes < EPISODES:
     writer.add_scalar('mean_net_reward', mean_net_rewards, done_episodes)
     writer.add_scalar('loss_reward_net', loss_rwd, done_episodes)        
 
-    print(f'{done_episodes}: reward: {env_reward:6.2f}, mean_env_reward: {mean_env_rewards:6.2f}, mean_net_reward: {mean_net_rewards:6.2f}, reward function loss: {loss_rwd:6.4f}')
+#     print(f'{done_episodes}: reward: {env_reward:6.2f}, mean_env_reward: {mean_env_rewards:6.2f}, mean_net_reward: {mean_net_rewards:6.2f}, reward function loss: {loss_rwd:6.4f}')
 
     ## Tensorboard logging 
-    if done_episodes%1000==0 or mean_env_rewards>=100:
+    if done_episodes%100==0 or mean_env_rewards>=100:
         fig = reward_net.visualize_net(agent_net, Npoints=20)
         writer.add_figure('Reward Net', fig, global_step=done_episodes/100)
         
         test_reward, test_fig = agent_net.test_agent(env,device)
         writer.add_scalar('test_reward', test_reward, done_episodes)
         writer.add_figure('Agent traj', test_fig, global_step=done_episodes/100)
-        torch.save(agent_net.state_dict(), 'C_pointspace_policy_net_origin.mod')
-        torch.save(reward_net.state_dict(), 'C_pointspace_reward_net_origin.mod')
+        torch.save(agent_net.state_dict(), 'pointspace_policy_net_origin.mod')
+        torch.save(reward_net.state_dict(), 'pointspace_reward_net_origin.mod')
 
     if mean_env_rewards >= 100:
         print(f'Solved in {step_idx} steps and {done_episodes} episodes!')
-        torch.save(agent_net.state_dict(), 'C_pointspace_policy_net_origin.mod')
-        torch.save(reward_net.state_dict(), 'C_pointspace_reward_net_origin.mod')
-        break
+        torch.save(agent_net.state_dict(), 'pointspace_policy_net_origin.mod')
+        torch.save(reward_net.state_dict(), 'pointspace_reward_net_origin.mod')
+#         break
 
     states_v = torch.FloatTensor(batch_states)
     batch_actions_t = torch.LongTensor(batch_actions)
@@ -143,8 +167,8 @@ while done_episodes < EPISODES:
     
     # batch_qvals_v = E(s)
     # REINFORCE
-    log_prob_actions_v = -batch_qvals_v * log_prob_v[range(len(batch_states)), batch_actions_t] #q(s,a)=p(a|s)E(s)
-    loss_v = log_prob_actions_v.mean()
+    log_prob_actions_v = batch_qvals_v * log_prob_v[range(len(batch_states)), batch_actions_t] #q(s,a)=p(a|s)E(s)
+    loss_v = -log_prob_actions_v.mean()
     writer.add_scalar('loss_agent_net', loss_v, done_episodes) 
     
     loss_v.backward()
@@ -154,6 +178,10 @@ while done_episodes < EPISODES:
 
 env.close()
 writer.close()
+
+
+# In[ ]:
+
 
 ## Testing 
 agent_net.eval()
@@ -169,6 +197,23 @@ for i in range(10):
         Reward += reward
     print("Trial :", i, " Reward: ", Reward)
 env.close()
+
+
+# In[ ]:
+
+
+reward_net.visualize_net(agent_net, Npoints=20)
+
+
+# In[ ]:
+
+
+# torch.save(agent_net.state_dict(), 'Results/C_origin/C_pointspace_policy_net_origin.mod')
+# torch.save(reward_net.state_dict(), 'Results/C_origin/C_pointspace_reward_net_origin.mod')
+
+
+# In[ ]:
+
 
 
 

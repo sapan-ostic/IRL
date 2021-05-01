@@ -31,8 +31,10 @@ class GRL():
     def control(self, s, timer, dt=0.01, Kp=-100, Kd=-3):
         if self.env.curve=='S':
             return self.SControl(s, timer, dt, Kp, Kd)
-        else:
+        elif self.env.curve=='C':
             return self.CControl(s, timer, dt, Kp, Kd)
+        elif self.env.curve=='CRev':
+            return self.CRevControl(s, timer, dt, Kp, Kd)
 
     def SControl(self, s, timer, dt=0.01, Kp=-100, Kd=-3):
         # Desired next states
@@ -51,6 +53,23 @@ class GRL():
         np.clip(ay, -1, 1, out=ay)
         return (ax, ay) 
 
+    def CRevControl(self, s, timer, dt=0.01, Kp=-100, Kd=-3):
+        # Desired next states
+        xdes = 0.5 - 0.5*np.cos(3.1457*(timer+self.dt))
+        ydes = 0.0 - 0.5*np.sin(3.1457*(timer+self.dt))
+        self.XDes.append(xdes)
+        self.YDes.append(ydes)        
+        ex = s[0] - xdes
+        ey = s[1] - ydes
+        ex_dot = s[2]
+        ey_dot = s[3]
+        ax = np.array(np.round(Kp*ex + Kd*ex_dot))
+        ay = np.array(np.round(Kp*ey + Kd*ey_dot))
+        
+        np.clip(ax, -1, 1, out=ax)
+        np.clip(ay, -1, 1, out=ay)
+        return (ax, ay)     
+
     def CControl(self, s, timer, dt=0.01, Kp=-100, Kd=-3):
         # Desired next states
         xdes = 0.5 - 0.5*np.cos(3.1457*(timer+self.dt))
@@ -66,7 +85,7 @@ class GRL():
         
         np.clip(ax, -1, 1, out=ax)
         np.clip(ay, -1, 1, out=ay)
-        return (ax, ay)     
+        return (ax, ay)         
 
     def encode_action(self, ax, ay):
         if ax == -1 and ay == -1:
@@ -264,7 +283,10 @@ class RewardNet(nn.Module):
             for j in range(Npoints):
                 state = np.array([S1[i], S2[j], 0, 0])
                 action, _ = agent_net.get_action(state)
-                x = torch.cat([float32_preprocessor(state), float32_preprocessor([action])]).view(1, -1).to(device)
+                prob = agent_net.predict_probs(state)
+                action = np.argmax(prob)
+                # x = torch.cat([float32_preprocessor(state), float32_preprocessor([action])]).view(1, -1).to(device)
+                x = float32_preprocessor(state).to(device)
                 r = self.forward(x)
                 Reward[i,j] = r
 
